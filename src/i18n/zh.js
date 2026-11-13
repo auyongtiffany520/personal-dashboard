@@ -71,6 +71,8 @@ export default {
   'Monthly order value': '每月订单额',
   'Eligible sales by sale date; the current month is partial.': '符合条件的销售，按销售日期；本月尚未结束。',
   'Order value by {0}': '按{0}的订单额',
+  'Order value by product': '按产品的订单额',
+  'Selected period; top 8 products.': '所选期间；显示前 8 个产品。',
   'Selected period.': '所选期间。',
   'Next actions': '下一步行动',
   'Open task suggestions by action date.': '未完成的待办建议，按行动日期排序。',
