@@ -9,9 +9,12 @@ import { buildCalendarItems } from '../core/calendar.js';
 import { dataBasis } from '../briefs/ai-prompt.js';
 import { isIsoDate, addDays, monthStart } from '../core/dates.js';
 import { getLocale } from '../i18n/i18n.js';
+import { DEFAULT_WORKSPACE, findWorkspace } from '../workspaces.js';
 
 export const view = {
-  store: null,            // storage/local-state.js store
+  store: null,            // storage/local-state.js store (for the current workspace)
+  storage: null,          // the browser storage the stores read and write
+  workspace: DEFAULT_WORKSPACE, // which workbench is shown (src/workspaces.js)
   persistent: true,       // false when the browser does not allow saving
   storageReason: '',
   businessId: MY_EXCEL,   // the one business: the viewer's own Excel
@@ -108,7 +111,8 @@ export function labelTl(key, fallbackEn) {
   return isZh() && p.labels_zh?.[key] ? `${p.labels_zh[key]}（${en}）` : en;
 }
 
-export function businessName(id = view.businessId) { const b = businessProfile(id).business; return (isZh() && b.name_zh) || b.name; }
+// The name at the top is the workbench's name (personal or a company).
+export function businessName() { const w = findWorkspace(view.workspace); return isZh() ? w.zh : w.name; }
 
 export function customerName(id) { return (records().customers || []).find(c => c.id === id)?.name || id || ''; }
 export function customerOwner(id) { return (records().customers || []).find(c => c.id === id)?.owner || ''; }

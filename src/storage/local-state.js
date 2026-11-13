@@ -25,6 +25,10 @@
 //       picks show in Tasks and the Calendar after a reload. `basis` is the fingerprint of the
 //       records it was made from. Reset, "Forget this file" and "Remove AI suggestions" remove it.
 
+//   bd-starter.v1.ws.<workspace>.…      the same workbook / matching / business / ai keys, one set per
+//     workbench (personal and each company, src/workspaces.js). The keys without ws. are from
+//     before workspaces and are removed on start-up (forgetLegacy).
+
 export const PREFIX = 'bd-starter.v1';
 export const STATE_VERSION = 1;
 // Browsers allow about 5 MB per site; leave room for the rest of the state.
@@ -134,9 +138,16 @@ function cleanAiPlan(p) {
   return { version: 1, at: text(p.at, 40), model: text(p.model, 80), where: text(p.where, 200), basis: p.basis.slice(0, 40), situation: text(p.situation, 2000), top, watch, unanswered: strings(p.unanswered, 500, 10), problems: strings(p.problems, 200, 20), dropped };
 }
 
-export function createStateStore(storage) {
-  const businessKey = id => `${PREFIX}.business.${id}`;
-  const aiKey = id => `${PREFIX}.ai.${id}`;
+// workspace (optional): one of several workbenches (src/workspaces.js). Each workspace keeps its
+// own Excel, matchings, decisions, notes and AI analysis under bd-starter.v1.ws.<workspace>.…;
+// the language, the chosen workspace and the Gemini key are shared. Without a workspace the
+// original keys are used.
+export function createStateStore(storage, { workspace = '' } = {}) {
+  const scope = /^[a-z0-9-]{1,40}$/.test(workspace) ? `${PREFIX}.ws.${workspace}` : PREFIX;
+  const businessKey = id => `${scope}.business.${id}`;
+  const aiKey = id => `${scope}.ai.${id}`;
+  const workbookKey = `${scope}.workbook`;
+  const matchingKey = `${scope}.matching`;
   const prefsKey = `${PREFIX}.prefs`;
   const read = key => { try { return JSON.parse(storage.getItem(key) || 'null'); } catch { return null; } };
   const write = (key, value) => { try { storage.setItem(key, JSON.stringify(value)); return true; } catch { return false; } };
@@ -153,7 +164,7 @@ export function createStateStore(storage) {
   const update = (id, fn) => { const s = business(id); fn(s); return write(businessKey(id), s); };
 
   return {
-    prefs() { const p = read(prefsKey); return p && typeof p === 'object' ? { locale: text(p.locale, 10) } : { locale: '' }; },
+    prefs() { const p = read(prefsKey); return p && typeof p === 'object' ? { locale: text(p.locale, 10), workspace: text(p.workspace, 40) } : { locale: '', workspace: '' }; },
     setPrefs(patch) { return write(prefsKey, { ...this.prefs(), ...patch }); },
     business,
     day(id) { return business(id).day; },
@@ -164,22 +175,22 @@ export function createStateStore(storage) {
     saveNote(id, note) { const c = cleanNote(note.entry_id, note); if (!c) return false; return update(id, s => { s.notes[c.entry_id] = c; }); },
     deleteNote(id, entryId) { return update(id, s => { delete s.notes[entryId]; }); },
     // "My Excel". saveWorkbook returns 'saved', 'too_large' (kept for this visit only) or 'failed'.
-    workbook() { return cleanWorkbook(read(`${PREFIX}.workbook`)); },
+    workbook() { return cleanWorkbook(read(workbookKey)); },
     saveWorkbook({ fileName, loadedAt, sheets, absent = [], matched = false }) {
       const json = JSON.stringify({ version: 1, fileName, loadedAt, sheets, absent, matched });
-      if (json.length > WORKBOOK_STORE_LIMIT) { try { storage.removeItem(`${PREFIX}.workbook`); } catch { /* ignore */ } return 'too_large'; }
-      try { storage.setItem(`${PREFIX}.workbook`, json); return 'saved'; } catch { return 'failed'; }
+      if (json.length > WORKBOOK_STORE_LIMIT) { try { storage.removeItem(workbookKey); } catch { /* ignore */ } return 'too_large'; }
+      try { storage.setItem(workbookKey, json); return 'saved'; } catch { return 'failed'; }
     },
     // How the viewer matched a workbook with this layout signature (null when none is kept).
-    matching(signature) { return cleanMatchings(read(`${PREFIX}.matching`)).find(m => m.signature === signature)?.matching || null; },
+    matching(signature) { return cleanMatchings(read(matchingKey)).find(m => m.signature === signature)?.matching || null; },
     // Every kept matching, most recent first (for a layout that changed a little: matching.js closestMatching).
-    matchings() { return cleanMatchings(read(`${PREFIX}.matching`)).map(m => m.matching); },
+    matchings() { return cleanMatchings(read(matchingKey)).map(m => m.matching); },
     setMatching(signature, matching) {
-      const others = cleanMatchings(read(`${PREFIX}.matching`)).filter(m => m.signature !== signature);
-      return write(`${PREFIX}.matching`, { version: 1, list: [{ signature, matching }, ...others].slice(0, MATCHINGS_KEPT) });
+      const others = cleanMatchings(read(matchingKey)).filter(m => m.signature !== signature);
+      return write(matchingKey, { version: 1, list: [{ signature, matching }, ...others].slice(0, MATCHINGS_KEPT) });
     },
     // Forgetting the file also clears its task decisions, notes, AI analysis and matching.
-    forgetWorkbook(id) { try { storage.removeItem(`${PREFIX}.workbook`); storage.removeItem(businessKey(id)); storage.removeItem(aiKey(id)); storage.removeItem(`${PREFIX}.matching`); return true; } catch { return false; } },
+    forgetWorkbook(id) { try { storage.removeItem(workbookKey); storage.removeItem(businessKey(id)); storage.removeItem(aiKey(id)); storage.removeItem(matchingKey); return true; } catch { return false; } },
     // The latest Gemini analysis in its fixed shape (null when none is kept).
     aiPlan(id) { return cleanAiPlan(read(aiKey(id))); },
     saveAiPlan(id, plan) { const c = cleanAiPlan({ ...plan, version: 1 }); return c ? write(aiKey(id), c) : false; },
@@ -190,10 +201,20 @@ export function createStateStore(storage) {
     forgetGeminiKey() { try { storage.removeItem(`${PREFIX}.gemini`); return true; } catch { return false; } },
     // Reset = back to the baseline: Day 1, no decisions, no notes, no AI analysis. The language choice is kept.
     resetBusiness(id) { try { storage.removeItem(businessKey(id)); storage.removeItem(aiKey(id)); return true; } catch { return false; } },
+    // Removes what the browser kept under the original keys (before workspaces): the old
+    // workbook, its matchings, decisions, notes and AI analysis. Language and key are kept.
+    forgetLegacy() {
+      try {
+        const keys = [];
+        for (let i = 0; i < storage.length; i++) { const k = storage.key(i); if (k && (k === `${PREFIX}.workbook` || k === `${PREFIX}.matching` || k.startsWith(`${PREFIX}.business.`) || k.startsWith(`${PREFIX}.ai.`))) keys.push(k); }
+        for (const k of keys) storage.removeItem(k);
+        return keys.length;
+      } catch { return 0; }
+    },
     resetAll() {
       try {
         const keys = [];
-        for (let i = 0; i < storage.length; i++) { const k = storage.key(i); if (k && (k.startsWith(`${PREFIX}.business.`) || k.startsWith(`${PREFIX}.ai.`))) keys.push(k); }
+        for (let i = 0; i < storage.length; i++) { const k = storage.key(i); if (k && (k.startsWith(`${scope}.business.`) || k.startsWith(`${scope}.ai.`))) keys.push(k); }
         for (const k of keys) storage.removeItem(k);
         return true;
       } catch { return false; }

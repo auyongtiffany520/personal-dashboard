@@ -621,4 +621,6 @@ export default {
   "This browser could not save the analysis, so its picks are not shown in Tasks or the Calendar.": "这个浏览器无法保存分析，所以它的建议没有显示在待办和日历上。",
   "This answer did not come in the expected form, so nothing was added to Tasks or the Calendar.": "这次的回答没有照指定的格式，所以没有加进待办和日历。",
   "The AI marks there are from the earlier analysis ({0}).": "那里的 AI 标记是之前那次分析（{0}）的。",
+  "Personal": "个人工作台",
+  "Workbench": "工作台",
 };

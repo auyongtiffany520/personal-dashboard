@@ -83,6 +83,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .topbar-right { display: flex; align-items: center; gap: 8px; }
 .lang { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
 .lang select { padding: 6px 12px; border-radius: 999px; }
+.workspace-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.ws-btn { font: inherit; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); padding: 8px 14px; border-radius: 999px; cursor: pointer; }
+.ws-btn:hover { background: var(--surface-2); }
+.ws-btn.active { background: var(--brand-soft); color: var(--brand-ink); border-color: var(--brand); font-weight: 600; }
+.ws-btn .ico { width: 16px; height: 16px; }
 .scenario-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 14px; }
 .scenario-bar:empty { display: none; }
 .scn-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }

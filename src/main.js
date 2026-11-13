@@ -9,6 +9,7 @@ import { view, scenario, isExcel } from './ui/view-state.js';
 import { h, t } from './ui/dom.js';
 import { registerPage, navigate, onBeforeRender } from './ui/router.js';
 import { initShell, refreshShell } from './ui/shell.js';
+import { findWorkspace } from './workspaces.js';
 import { renderOverview } from './ui/pages/overview.js';
 import { renderSales } from './ui/pages/sales.js';
 import { renderCustomers } from './ui/pages/customers.js';
@@ -40,10 +41,15 @@ function guarded(render) {
 
 function boot() {
   const { storage, persistent, reason } = openStorage();
-  view.store = createStateStore(storage);
+  view.storage = storage;
   view.persistent = persistent;
   view.storageReason = reason;
-  const prefs = view.store.prefs();
+  // The workbench last used here (personal or one of the companies); each has its own data.
+  const prefs = createStateStore(storage).prefs();
+  view.workspace = findWorkspace(prefs.workspace).id;
+  view.store = createStateStore(storage, { workspace: view.workspace });
+  // Data kept from before workspaces existed (the practice workbook) is removed once.
+  view.store.forgetLegacy();
   setLocale(prefs.locale || 'zh-CN');
   // Your own Excel, if one was opened here before (kept in this browser).
   try { restoreWorkbook(); } catch (e) { console.error(e); }

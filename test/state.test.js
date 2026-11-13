@@ -165,3 +165,30 @@ test('when the browser blocks storage the app keeps working in memory and says s
   assert.equal(createStateStore(full).saveNote(MY_EXCEL, { entry_id: 'n1', date: '2026-08-30', title: 'x' }), false, 'a failed write is reported, not hidden');
   assert.equal(openStorage(() => memoryStorage()).persistent, true);
 });
+
+test('each workspace keeps its own workbook, notes and AI analysis; old practice data is removed', () => {
+  const storage = memoryStorage();
+  // What an earlier version kept under the original keys (the practice workbook and its notes).
+  const legacy = createStateStore(storage);
+  legacy.saveWorkbook({ fileName: 'BetterSpace_B2B.xlsx', loadedAt: '2026-11-13T00:00:00Z', sheets: { Sales: [['order_id']] } });
+  legacy.saveNote(MY_EXCEL, { entry_id: 'n1', date: '2026-08-30', title: 'practice' });
+  legacy.setPrefs({ locale: 'zh-CN' });
+
+  const nutri = createStateStore(storage, { workspace: 'nutri-noodle' });
+  assert.ok(nutri.forgetLegacy() >= 2);
+  assert.equal(legacy.workbook(), null, 'the practice workbook is gone');
+  assert.equal(legacy.notes(MY_EXCEL).length, 0);
+  assert.equal(nutri.prefs().locale, 'zh-CN', 'the language is kept');
+
+  nutri.saveWorkbook({ fileName: 'Nutri.xlsx', loadedAt: '2026-11-13T00:00:00Z', sheets: { Sales: [['order_id']] } });
+  nutri.saveNote(MY_EXCEL, { entry_id: 'n2', date: '2026-11-13', title: 'noodles' });
+  const her = createStateStore(storage, { workspace: 'her-asia' });
+  assert.equal(her.workbook(), null, 'another workspace starts empty');
+  assert.equal(her.notes(MY_EXCEL).length, 0);
+  her.resetAll();
+  assert.equal(nutri.notes(MY_EXCEL).length, 1, 'clearing one workspace leaves the others alone');
+  assert.equal(createStateStore(storage, { workspace: 'nutri-noodle' }).workbook().fileName, 'Nutri.xlsx');
+
+  nutri.setPrefs({ workspace: 'her-asia' });
+  assert.equal(her.prefs().workspace, 'her-asia', 'the chosen workspace is shared');
+});

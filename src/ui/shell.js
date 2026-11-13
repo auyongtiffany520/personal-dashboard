@@ -9,7 +9,8 @@ import { icon } from './icons.js';
 import { pickExcel, forgetExcel, restoreWorkbook } from './pages/excel.js';
 import { formatDate } from '../core/dates.js';
 import { setLocale, getLocale, tr, tl } from '../i18n/i18n.js';
-import { PREFIX } from '../storage/local-state.js';
+import { PREFIX, createStateStore } from '../storage/local-state.js';
+import { WORKSPACES } from '../workspaces.js';
 
 // Menu entries: page id → English name (translated with tl, or the business's own label).
 const NAV = [
@@ -44,7 +45,7 @@ export function initShell() {
   // Another tab of this demo changed the saved state: show the same thing here.
   window.addEventListener('storage', e => {
     if (e.key !== null && !e.key.startsWith(PREFIX)) return;
-    if (e.key === null || e.key === `${PREFIX}.workbook`) restoreWorkbook();
+    if (e.key === null || e.key.endsWith('.workbook')) restoreWorkbook();
     rerender();
   });
 }
@@ -57,6 +58,7 @@ export function refreshShell() {
   $('#nav').setAttribute('aria-label', tr('Sections'));
   $('#business-name').textContent = businessName();
   renderRibbon();
+  renderWorkspaceBar();
   renderScenarioBar();
   for (const a of $('#nav').querySelectorAll('a[data-page]')) {
     const entry = NAV.find(([id]) => id === a.dataset.page);
@@ -76,6 +78,28 @@ function renderRibbon() {
   add(r, h('strong', {}, tr('Your own Excel')), ' · ', tr('Read on this computer only; nothing is uploaded.'), ' ',
     view.persistent ? tr('Your changes are saved only in this browser.') : tr('Your changes are not saved in this browser.'), ' ',
     h('a', { href: '#about' }, tr('About this dashboard')));
+}
+
+// One button per workbench (personal + the companies). Each has its own Excel, tasks,
+// calendar notes and AI analysis; switching keeps the page you are on.
+function renderWorkspaceBar() {
+  const bar = $('#workspace-bar'); bar.textContent = '';
+  bar.setAttribute('aria-label', tr('Workbench'));
+  for (const w of WORKSPACES) {
+    const current = w.id === view.workspace;
+    add(bar, h('button', { class: `ws-btn${current ? ' active' : ''}`, 'aria-pressed': String(current), onclick: () => switchWorkspace(w.id) },
+      icon(w.id === 'personal' ? 'user' : 'building'), t('span', w.id === 'personal' ? tr('Personal') : w.name)));
+  }
+}
+
+export function switchWorkspace(id) {
+  if (id === view.workspace) return;
+  view.workspace = id;
+  view.store = createStateStore(view.storage, { workspace: id });
+  view.store.setPrefs({ workspace: id });
+  view.filters = defaultFilters(); view.calMonth = ''; view.calDay = ''; view.taskView = 'open';
+  restoreWorkbook();
+  rerender();
 }
 
 function renderScenarioBar() {
